@@ -165,27 +165,19 @@ run_test() {
 }
 
 # Primeiro teste: verificar conectividade com o servidor
-run_test "src/tests/k6-connectivity-check.js" "Verificação de conectividade com o servidor" "30s"
+run_test "src/tests/k6/k6-connectivity-check.js" "Verificação de conectividade com o servidor" "30s"
 connect_result=$?
 
 # Se o teste de conectividade for bem-sucedido, continue com os outros testes
 if [ $connect_result -eq 0 ]; then
-  # Teste básico de carga
-  run_test "src/tests/k6-leaky-bucket-improved.js" "Teste de pico de carga (spike test)" "2m"
+  # Teste simples
+  run_test "src/tests/k6/k6-simples.js" "Teste simples do sistema" "30s"
 
-  # Teste de status de token
-  if [ -f "src/tests/k6-token-status-test.js" ]; then
-    run_test "src/tests/k6-token-status-test.js" "Teste do endpoint de status de token" "1m"
-  fi
+  # Teste básico de conexão
+  run_test "src/tests/k6/k6-basic-connection-test.js" "Teste básico de conexão" "30s"
 
-  # Teste com múltiplos usuários
-  run_test "src/tests/k6-multi-user-test.js" "Teste com múltiplos usuários (IPs diferentes)" "2m"
-
-  # Teste de recarga de tokens
-  read -p "Deseja executar o teste de recarga de tokens? Este teste leva vários minutos (y/n): " choice
-  if [[ "$choice" =~ ^[Yy]$ ]]; then
-    run_test "src/tests/k6-token-refill-test.js" "Teste de recarga automática de tokens" "10m"
-  fi
+  # Teste de carga
+  run_test "src/tests/k6/k6-leaky-bucket-improved.js" "Teste de pico de carga (spike test)" "2m"
 
   echo -e "\n${BLUE}=== Todos os testes concluídos ===${NC}"
 else

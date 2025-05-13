@@ -89,7 +89,10 @@ const API_URL = 'http://localhost:4000/graphql';
 const QUERY_PAYLOAD = JSON.stringify({
   query: `
     query {
-      hello
+      tokenStatus {
+        availableTokens
+        maxTokens
+      }
     }
   `
 });
@@ -114,9 +117,9 @@ export default function () {
     // Analisa o corpo da resposta para obter informações sobre o rate limit
     try {
       const body = JSON.parse(res.body);
-      console.log(`Tokens disponíveis: ${body.tokenStatus?.available || 0}`);
-      console.log(`Máximo de tokens: ${body.tokenStatus?.maximum || 0}`);
-      console.log(`Tentar novamente em: ${body.tokenStatus?.retryAfterFormatted || 'desconhecido'}`);
+      if (body.errors && body.errors.length > 0) {
+        console.log(`Erro: ${body.errors[0].message}`);
+      }
     } catch (e) {
       // Se não for JSON ou não tiver a estrutura esperada
       console.log('Não foi possível analisar a resposta');

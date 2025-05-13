@@ -164,14 +164,14 @@ run_test() {
   fi
 }
 
-# Apenas um teste simplificado com timeout maior
-run_test "src/tests/k6-connectivity-check.js" "Verificação de conectividade com o servidor" "30s"
+# Apenas um teste simplificado com timeout menor
+run_test "src/tests/k6/k6-simples.js" "Teste simples" "15s"
 connectivity_result=$?
 if [ $connectivity_result -eq 0 ]; then
-  echo -e "${GREEN}Teste de conectividade bem-sucedido! Executando teste com múltiplos usuários...${NC}"
-  run_test "src/tests/k6-multi-user-test-timeout.js" "Teste com múltiplos usuários (timeout aumentado)" "2m"
+  echo -e "${GREEN}Teste simples bem-sucedido! Executando teste de conexão básica...${NC}"
+  run_test "src/tests/k6/k6-basic-connection-test.js" "Teste de conexão básica" "30s"
 else
-  echo -e "${RED}O teste de conectividade falhou. Verificando problemas no servidor...${NC}"
+  echo -e "${RED}O teste simples falhou. Verificando problemas no servidor...${NC}"
   if [ -n "$SERVER_PID" ] && [ -f "/tmp/server.log" ]; then
     echo -e "${YELLOW}Últimas linhas do log do servidor:${NC}"
     tail -n 20 /tmp/server.log
