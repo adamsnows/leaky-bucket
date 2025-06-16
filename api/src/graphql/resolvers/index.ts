@@ -1,74 +1,43 @@
-import { Context } from "koa";
 import { AuthenticationError, UserInputError } from "apollo-server-koa";
+import { Context } from "koa";
 import { config } from "../../config/environment";
 import { getTokenStatus } from "../../middlewares/leakyBucket";
+import {
+  AuthResponse,
+  PixTransaction as GraphQLPixTransaction,
+  PixTransactionResponse as GraphQLPixTransactionResponse,
+  MutationInitiatePixTransactionArgs,
+  MutationLoginArgs,
+  MutationRegisterArgs,
+  PixTransactionInput,
+  RateLimitInfo,
+  TokenStatus,
+  User,
+} from "../../types/graphql";
+import { GraphQLContext } from "../context";
 
-interface User {
-  id: string;
-  username: string;
-  email: string;
+// Extended interfaces for internal use (with password field)
+interface UserWithPassword extends User {
   password: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
-interface AuthResponse {
-  token: string;
-  user: Omit<User, "password">;
+interface PixTransaction extends GraphQLPixTransaction {
+  // Add any additional fields needed internally
 }
 
-interface RateLimitInfo {
-  remaining: number;
-  limit: number;
-  resetAt: string;
-}
-
-interface TokenStatus {
-  availableTokens: number;
-  maxTokens: number;
-}
-
-interface PixTransaction {
-  transactionId: string;
-  pixKeyType: string;
-  pixKey: string;
-  amount: number;
-  status: string;
-  createdAt: string;
-}
-
-interface PixTransactionResponse {
-  success: boolean;
-  message: string;
-  transactionId?: string;
-}
-
-interface PixTransactionInput {
-  pixKeyType: string;
-  pixKey: string;
-  amount: number;
+interface PixTransactionResponse extends GraphQLPixTransactionResponse {
+  // Add any additional fields needed internally
 }
 
 interface ResolverContext {
   ctx: Context;
 }
 
-interface RegisterArgs {
-  username: string;
-  email: string;
-  password: string;
-}
-
-interface LoginArgs {
-  email: string;
-  password: string;
-}
-
 interface PixTransactionArgs {
   input: PixTransactionInput;
 }
 
-const mockUsers: User[] = [
+const mockUsers: UserWithPassword[] = [
   {
     id: "1",
     username: "testuser",
@@ -86,18 +55,14 @@ const resolvers = {
     me: (
       _: any,
       __: any,
-      { ctx }: ResolverContext
+      { ctx }: GraphQLContext
     ): Omit<User, "password"> | null => {
       const user = mockUsers[0];
       const { password, ...userWithoutPassword } = user;
       return userWithoutPassword;
     },
 
-    getRateLimit: (
-      _: any,
-      __: any,
-      { ctx }: ResolverContext
-    ): RateLimitInfo => {
+    getRateLimit: (_: any, __: any, { ctx }: GraphQLContext): RateLimitInfo => {
       const remaining = parseInt(
         ctx.response.get("X-RateLimit-Remaining") || "0",
         10
@@ -111,7 +76,11 @@ const resolvers = {
       };
     },
 
-    tokenStatus: async (_: any, __: any, { ctx }: ResolverContext): Promise<TokenStatus> => {
+    tokenStatus: async (
+      _: any,
+      __: any,
+      { ctx }: GraphQLContext
+    ): Promise<TokenStatus> => {
       const identifier = ctx.state.rateLimit?.identifier || ctx.ip;
       const capacity = config.bucketCapacity;
       const status = await getTokenStatus(identifier, capacity);
@@ -123,13 +92,13 @@ const resolvers = {
   Mutation: {
     register: (
       _parent: any,
-      { username, email, password }: RegisterArgs
+      { username, email, password }: MutationRegisterArgs
     ): AuthResponse => {
       if (mockUsers.some((user) => user.email === email)) {
         throw new UserInputError("Usuário com esse e-mail já existe!");
       }
 
-      const newUser: User = {
+      const newUser: UserWithPassword = {
         id: (mockUsers.length + 1).toString(),
         username,
         email,
@@ -149,8 +118,8 @@ const resolvers = {
 
     login: (
       _parent: any,
-      { email, password }: LoginArgs,
-      { ctx }: ResolverContext
+      { email, password }: MutationLoginArgs,
+      { ctx }: GraphQLContext
     ): AuthResponse => {
       const user = mockUsers.find((user) => user.email === email);
 
@@ -171,8 +140,8 @@ const resolvers = {
 
     initiatePixTransaction: (
       _parent: any,
-      { input }: PixTransactionArgs,
-      { ctx }: ResolverContext
+      { input }: MutationInitiatePixTransactionArgs,
+      { ctx }: GraphQLContext
     ): PixTransactionResponse => {
       const { pixKeyType, pixKey, amount } = input;
 

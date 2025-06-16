@@ -1,0 +1,17 @@
+overwrite: true
+schema: "src/graphql/typeDefs/index.ts"
+generates:
+  src/types/graphql.ts:
+    plugins:
+      - "typescript"
+      - "typescript-resolvers"
+    config:
+      useIndexSignature: true
+      contextType: "../graphql/context#GraphQLContext"
+      enumsAsTypes: true
+      scalars:
+        DateTime: Date
+        JSON: any
+  src/types/introspection.json:
+    plugins:
+      - "introspection"

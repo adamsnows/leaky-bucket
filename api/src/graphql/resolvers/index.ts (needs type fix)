@@ -1,4 +1,0 @@
-return {
-    availableTokens: 0,
-    maxTokens: 0
-};

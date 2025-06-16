@@ -1,25 +1,23 @@
-import Koa from "koa";
+import cors from "@koa/cors";
 import { ApolloServer } from "apollo-server-koa";
+import dotenv from "dotenv";
+import Koa from "koa";
 import bodyParser from "koa-bodyparser";
 import Router from "koa-router";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
-import cors from "@koa/cors";
 
 import { config } from "./config/environment";
 
-import typeDefs from "./graphql/typeDefs";
 import resolvers from "./graphql/resolvers";
+import typeDefs from "./graphql/typeDefs";
 
+import { GraphQLFormattedError } from "graphql";
 import errorMiddleware from "./middlewares/error";
 import leakyBucketMiddleware from "./middlewares/leakyBucket";
-import { GraphQLFormattedError } from "graphql";
 
 dotenv.config();
 
-interface ApolloContext {
-  ctx: Koa.Context;
-}
+import { GraphQLContext } from "./graphql/context";
 
 interface ServerError extends Error {
   extensions?: {
@@ -58,7 +56,7 @@ const createApolloServer = () => {
   return new ApolloServer({
     typeDefs,
     resolvers,
-    context: ({ ctx }): ApolloContext => ({ ctx }),
+    context: ({ ctx }): GraphQLContext => ({ ctx }),
     formatError: (error): GraphQLFormattedError => {
       if (config.nodeEnv === "production" && error.extensions?.exception) {
         const exception = error.extensions.exception as {
@@ -79,15 +77,21 @@ const connectDB = async (): Promise<void> => {
     console.log("MongoDB connected successfully");
     return;
   } catch (err) {
-    console.error("Failed with primary MongoDB URI, trying fallback connection...");
+    console.error(
+      "Failed with primary MongoDB URI, trying fallback connection..."
+    );
 
     try {
       if (config.mongodbUri.includes("localhost")) {
-        await mongoose.connect(config.mongodbUri.replace("localhost", "mongodb"));
+        await mongoose.connect(
+          config.mongodbUri.replace("localhost", "mongodb")
+        );
         console.log("MongoDB connected successfully via Docker network");
         return;
       } else if (config.mongodbUri.includes("mongodb:")) {
-        await mongoose.connect(config.mongodbUri.replace("mongodb:", "localhost:"));
+        await mongoose.connect(
+          config.mongodbUri.replace("mongodb:", "localhost:")
+        );
         console.log("MongoDB connected successfully via localhost");
         return;
       }
