@@ -5,14 +5,18 @@
   "main": "dist/index.js",
   "scripts": {
     "start": "node dist/index.js",
+    "predev": "pnpm codegen",
     "dev": "NODE_OPTIONS=\"--no-deprecation\" ts-node-dev --respawn --transpile-only src/index.ts",
+    "prebuild": "pnpm codegen",
     "build": "tsc",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "clean": "rimraf dist node_modules",
     "test:k6:simple": "chmod +x ./run-simple-test.sh && ./run-simple-test.sh",
     "test:k6:all": "chmod +x ./run-tests.sh && ./run-tests.sh",
-    "test:all": "npm run test && npm run test:k6:basic && npm run test:k6"
+    "test:all": "npm run test && npm run test:k6:basic && npm run test:k6",
+    "codegen": "graphql-codegen --config codegen.yml",
+    "codegen:watch": "graphql-codegen --config codegen.yml --watch"
   },
   "keywords": [],
   "author": "",
@@ -48,6 +52,10 @@
   "devDependencies": {
     "@babel/core": "^7.27.1",
     "@babel/preset-env": "^7.27.2",
+    "@graphql-codegen/cli": "^5.0.7",
+    "@graphql-codegen/introspection": "^4.0.3",
+    "@graphql-codegen/typescript": "^4.1.6",
+    "@graphql-codegen/typescript-resolvers": "^4.5.1",
     "@types/dotenv-safe": "^8.1.6",
     "@types/jest": "^29.5.14",
     "@types/whatwg-mimetype": "^3.0.2",

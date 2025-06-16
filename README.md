@@ -18,7 +18,16 @@ O objetivo é implementar uma estratégia de **Leaky Bucket** com autenticação
 
 ## 🔄 Controle de Versão
 
-### v1.2 (07/05) - Correções de TypeScript e melhorias no client
+### v1.3 (13/05/2025) - Testes de carga avançados com K6 e Mutex
+
+- **Scripts de teste de carga**: Implementação de múltiplos cenários de teste com K6
+- **Teste simples**: Adição de testes simplificados para verificação rápida da API
+- **Scripts de execução automatizada**: Facilitando a execução dos diferentes cenários de teste
+- **Mutex para controle de concorrência**: Explicação detalhada da implementação de mutex para garantia de atomicidade
+- **Prevenção de race conditions**: Garantia de consistência em ambientes de alta concorrência
+- **Documentação aprimorada**: Detalhamento dos testes disponíveis e suas finalidades
+
+### v1.2 (07/05/2025) - Correções de TypeScript e melhorias no client
 
 - **Correções no api-client**: Resolução de problemas de tipagem no cliente de API do frontend
 - **Melhoria na manipulação de headers**: Implementação da classe Headers para correta tipagem dos cabeçalhos HTTP
@@ -378,30 +387,132 @@ NEXT_PUBLIC_API_URL=http://localhost:4000/graphql
 4. Após consumir todos os tokens, você receberá um erro
 5. Use a query `tokenStatus` para monitorar o estado dos seus tokens
 
-### Teste de Carga com K6 (v1.2)
+### Testes de Carga com K6 (v1.3)
 
-Para validar o comportamento do middleware sob alta concorrência:
+Para validar o comportamento do middleware sob alta concorrência, implementamos uma série de testes de carga usando K6. Esses testes simulam diferentes cenários de uso e ajudam a verificar se o sistema de leaky bucket funciona adequadamente sob pressão.
 
-1. Instale o K6: `brew install k6` (no macOS)
-2. Execute o teste de carga: `k6 run api/src/tests/k6-leaky-bucket-test.js`
-3. Observe o relatório para verificar o comportamento do leaky bucket em condições de alta concorrência
+#### Instalação do K6
 
-O teste de carga simula múltiplos usuários acessando a API simultaneamente e verifica se o limite de tokens é respeitado adequadamente.
+```bash
+# macOS
+brew install k6
 
-### Testes Unitários para Atomicidade (v1.2)
+# Linux
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+sudo apt-get update
+sudo apt-get install k6
 
-O projeto agora inclui testes automatizados para validar a atomicidade das operações:
+# Windows
+chocolatey install k6
+```
+
+#### Scripts de Execução
+
+Foram criados dois scripts para facilitar a execução dos testes:
+
+```bash
+# Execute todos os testes de carga
+./run-tests.sh
+
+# Execute apenas o teste simples para verificação rápida
+./run-simple-test.sh
+```
+
+#### Testes Disponíveis
+
+1. **Teste Simples**
+   - Teste básico para verificação rápida do funcionamento da API
+   - Execução: `k6 run src/tests/k6/k6-simples.js`
+   - Comportamento: Faz uma única requisição para verificar a disponibilidade de tokens
+
+2. **Teste de Conectividade**
+   - Verifica a conectividade básica com o servidor
+   - Execução: `k6 run src/tests/k6/k6-connectivity-check.js`
+   - Usado para garantir que o servidor está operacional antes de executar testes mais complexos
+
+3. **Teste Básico de Conexão**
+   - Teste complementar de conectividade
+   - Execução: `k6 run src/tests/k6/k6-basic-connection-test.js`
+   - Verifica headers e tempos de resposta básicos
+
+4. **Teste de Pico de Carga (Spike Test)**
+   - Simula um aumento repentino de tráfego
+   - Execução: `k6 run src/tests/k6/k6-leaky-bucket-improved.js`
+   - Comportamento: Começa com poucas req/s, aumenta rapidamente para simular pico, e depois reduz gradualmente
+
+#### Métricas e Análise
+
+Após a execução dos testes, o K6 fornece um relatório detalhado com métricas como:
+
+- Taxa de requisições por segundo
+- Tempo médio de resposta
+- Taxa de falha
+- Percentis de tempo de resposta (p90, p95)
+
+Essas métricas ajudam a identificar possíveis gargalos e verificar se o leaky bucket está funcionando conforme esperado em condições de alta carga.
+
+### Implementação do Mutex para Controle de Concorrência
+
+No sistema Leaky Bucket, utilizamos o padrão Mutex (Mutual Exclusion) para garantir operações atômicas durante o controle de acesso concorrente aos tokens. O Mutex desempenha um papel crítico nas seguintes áreas:
+
+1. **Prevenção de race conditions**: Evita que múltiplas requisições simultâneas acessem e modifiquem o mesmo bucket simultaneamente
+2. **Garantia de atomicidade**: Assegura que operações críticas como verificação, consumo e restauração de tokens sejam executadas de forma atômica
+3. **Consistência do estado**: Mantém o estado do bucket consistente mesmo sob alta carga concorrente
+
+Implementamos o Mutex usando a biblioteca `async-mutex`, que fornece uma API Promise-based para controle de concorrência. Cada bucket de usuário tem seu próprio mutex, permitindo que diferentes usuários façam requisições simultaneamente sem afetar uns aos outros.
+
+```typescript
+// Código simplificado mostrando uso do mutex
+return await mutex.runExclusive(async () => {
+  // Operações atômicas no bucket
+  if (bucket.tokens < 1) {
+    // Limite excedido
+    return;
+  }
+
+  // Consumir token
+  bucket.tokens -= 1;
+
+  // Processar requisição
+  await next();
+
+  // Restaurar token em caso de sucesso
+  if (requisicaoBemSucedida) {
+    bucket.tokens += 1;
+  }
+});
+```
+### Testes Unitários para Atomicidade e Mutex
+
+O projeto inclui testes automatizados para validar a atomicidade das operações e o funcionamento do Mutex:
 
 ```bash
 cd api
 pnpm test src/tests/leakyBucket.test.ts
 ```
 
-Esses testes verificam se:
+Esses testes verificam:
 - O consumo de tokens respeita o limite configurado
 - As operações de consumo e restauração de tokens são atômicas
-- Múltiplas requisições simultâneas são tratadas corretamente
+- Múltiplas requisições simultâneas são tratadas corretamente pelo Mutex
+- O sistema não permite condições de corrida que poderiam levar ao consumo excessivo de tokens
 
+Exemplos de testes unitários:
+
+```typescript
+test('deve consumir um token quando uma requisição falha', async () => {
+  // Configuração inicial do bucket
+  // Simula uma requisição com falha
+  // Verifica se o token foi corretamente consumido
+});
+
+test('não deve permitir concorrência que resulte em consumo excessivo de tokens', async () => {
+  // Configura bucket com tokens limitados
+  // Executa múltiplas requisições concorrentes
+  // Verifica se o número total de requisições bem-sucedidas não excede o limite de tokens
+});
+```
 ## 📚 Documentação da API GraphQL
 
 ### Queries
@@ -494,8 +605,11 @@ mutation {
 - Autenticação JWT simples (para produção, implementar refresh tokens)
 - Adicionar testes automatizados para frontend e backend
 - Implementar um contador de tempo para que o usuário saiba quando será liberado um novo token
+- **NOVO (v1.3)**: Expandir os testes automatizados de K6 para cobrir mais cenários de uso
+- **NOVO (v1.3)**: Implementar visualização gráfica dos resultados dos testes de carga
 - **NOVO (v1.2)**: Melhorar cobertura de testes para cenários específicos de concorrência
 - **NOVO (v1.2)**: Implementar monitoramento em tempo real do consumo de tokens
+- **NOVO (v1.2)**: Configurar CI/CD com testes automatizados de carga para validar performance antes de deploys
 
 ## 📝 Especificações do BACEN (DICT)
 
