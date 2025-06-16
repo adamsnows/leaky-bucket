@@ -12,6 +12,12 @@ import { isTokenStatusQuery } from "./utils";
  * Cada cliente (identificado por IP ou função customizada) tem seu próprio bucket
  * com capacidade limitada que se recarrega ao longo do tempo.
  *
+ * Comportamento:
+ * - Se a requisição for bem-sucedida: consome o token mas o restaura
+ * - Se a requisição falhar: consome o token permanentemente
+ * - Tokens são adicionados ao bucket automaticamente pela passagem do tempo (leak rate)
+ * - Se não há tokens disponíveis, a requisição é rejeitada com status 429
+ *
  * @param options Opções de configuração
  * @returns Middleware Koa
  */
@@ -63,9 +69,45 @@ export const leakyBucketMiddleware = (options: LeakyBucketOptions = {}) => {
 
     try {
       await next();
+
+      // Check if response has GraphQL errors
+      let responseBody = ctx.body;
+      if (typeof responseBody === "string") {
+        try {
+          responseBody = JSON.parse(responseBody);
+        } catch (e) {
+          console.error(
+            `[LeakyBucket] Failed to parse response body: ${
+              (e as Error).message
+            }`
+          );
+        }
+      }
+
+      const hasGraphQLErrors =
+        responseBody &&
+        typeof responseBody === "object" &&
+        "errors" in responseBody &&
+        Array.isArray(responseBody.errors) &&
+        responseBody.errors.length > 0;
+
+      if (hasGraphQLErrors) {
+        // GraphQL error detected, token remains consumed
+        console.log(
+          `[LeakyBucket] Request failed (GraphQL errors found), token consumed. Remaining: ${bucket.tokens}/${capacity}`
+        );
+      } else {
+        // Request was successful, restore the token
+        restoreToken(identifier, capacity);
+        console.log(
+          `[LeakyBucket] Request successful, token restored. Available: ${bucket.tokens}/${capacity}`
+        );
+      }
     } catch (error) {
-      // Restore token on error (except for rate limit errors)
-      restoreToken(identifier, capacity);
+      // If request failed with exception, token remains consumed
+      console.log(
+        `[LeakyBucket] Request failed (exception), token consumed. Remaining: ${bucket.tokens}/${capacity}`
+      );
       throw error;
     }
   };

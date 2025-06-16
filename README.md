@@ -18,6 +18,55 @@ O objetivo é implementar uma estratégia de **Leaky Bucket** com autenticação
 
 ## 🔄 Controle de Versão
 
+### v1.4 (Janeiro 2025) - Modularização Completa e GraphQL Code Generator
+
+- **🏗️ Modularização do Middleware**: Refatoração completa do middleware Leaky Bucket
+  - Divisão em 6 arquivos especializados para melhor organização
+  - Separação clara de responsabilidades (types, utils, bucket, responses)
+  - Melhoria significativa na legibilidade e manutenibilidade
+  - Facilitação de testes unitários e debugging
+
+- **🤖 GraphQL Code Generator**: Implementação de geração automática de types
+  - Auto-geração de types TypeScript a partir do schema GraphQL
+  - Type safety completo em resolvers e middleware
+  - Scripts automatizados para regeneração de types
+  - Integração com build process (pre-dev e pre-build)
+
+- **📚 Documentação Aprimorada**:
+  - READMEs específicos para cada módulo
+  - Guias de uso do GraphQL Code Generator
+  - Documentação da nova arquitetura modular
+  - Resumo detalhado da modularização com métricas de melhoria
+
+#### Nova Estrutura Modular do Middleware
+
+```
+leakyBucket/
+├── index.ts                    # Orquestração principal e exports
+├── types.ts                    # Interfaces e tipos TypeScript
+├── utils.ts                    # Funções utilitárias puras
+├── bucket.ts                   # Gerenciamento de buckets e tokens
+├── responses.ts                # Geração de respostas HTTP
+├── README.md                   # Documentação completa
+└── MODULARIZATION_SUMMARY.md   # Resumo detalhado da modularização
+```
+
+#### GraphQL Code Generator Configurado
+
+```yaml
+# codegen.yml
+overwrite: true
+schema: "src/graphql/typeDefs/index.ts"
+generates:
+  src/types/graphql.ts:
+    plugins:
+      - "typescript"
+      - "typescript-resolvers"
+    config:
+      useIndexSignature: true
+      contextType: "../graphql/context#GraphQLContext"
+```
+
 ### v1.3 (13/05/2025) - Testes de carga avançados com K6 e Mutex
 
 - **Scripts de teste de carga**: Implementação de múltiplos cenários de teste com K6
@@ -74,18 +123,32 @@ O projeto está dividido em duas partes principais:
 api/
   ├── package.json
   ├── tsconfig.json
+  ├── codegen.yml               # Configuração GraphQL Code Generator
   ├── src/
-  │   ├── index.ts                # Ponto de entrada da aplicação
+  │   ├── index.ts              # Ponto de entrada da aplicação
+  │   ├── types/
+  │   │   └── graphql.ts        # Types auto-gerados (não editar)
   │   ├── config/
-  │   │   └── environment.ts      # Configurações do ambiente
+  │   │   └── environment.ts    # Configurações do ambiente
   │   ├── graphql/
+  │   │   ├── context.ts        # Interface do contexto GraphQL
   │   │   ├── resolvers/
-  │   │   │   └── index.ts        # Resolvers GraphQL
+  │   │   │   └── index.ts      # Resolvers GraphQL (type-safe)
   │   │   └── typeDefs/
-  │   │       └── index.ts        # Definições de tipos GraphQL
+  │   │       └── index.ts      # Definições de tipos GraphQL
   │   ├── middlewares/
-  │   │   ├── error.ts            # Middleware de tratamento de erros
-  │   │   └── leakyBucket.ts      # Middleware de rate limiting (Leaky Bucket)
+  │   │   ├── error.ts          # Middleware de tratamento de erros
+  │   │   ├── leakyBucket.ts    # Re-export da versão modular
+  │   │   └── leakyBucket/      # 🆕 Middleware modularizado
+  │   │       ├── index.ts      # Middleware principal
+  │   │       ├── types.ts      # Interfaces TypeScript
+  │   │       ├── utils.ts      # Funções utilitárias
+  │   │       ├── bucket.ts     # Gerenciamento de buckets
+  │   │       ├── responses.ts  # Respostas HTTP
+  │   │       ├── README.md     # Documentação do middleware
+  │   │       └── MODULARIZATION_SUMMARY.md  # Resumo da modularização
+  │   └── docs/
+  │       └── GRAPHQL_TYPES.md  # Guia do GraphQL Code Generator
 ```
 
 ### Frontend (pasta `/frontend`)
@@ -125,15 +188,115 @@ frontend/
 
 ## 🚀 Principais Funcionalidades
 
-### 1. Middleware Leaky Bucket (Backend)
+### 1. Middleware Leaky Bucket (Backend) - v1.4 Modularizado
 
-O coração da aplicação é o middleware Leaky Bucket implementado em `src/middlewares/leakyBucket.ts`. Este middleware:
+O coração da aplicação é o middleware Leaky Bucket, agora **completamente modularizado** em `src/middlewares/leakyBucket/`. Este middleware:
 
 - Rastreia os tokens disponíveis para cada usuário
 - Aplica a lógica de consumo e restauração de tokens
 - Implementa o mecanismo de recarga de tokens (1 token por hora)
 - Impede o usuário de fazer mais requisições ao bater o limite
-- **NOVO (v1.2)**: Garante atomicidade das operações usando Mutex
+- **v1.2**: Garante atomicidade das operações usando Mutex
+- **🆕 v1.4**: Arquitetura modular com separação clara de responsabilidades
+
+#### Nova Arquitetura Modular (v1.4)
+
+O middleware foi dividido em 6 arquivos especializados:
+
+```typescript
+// 📁 leakyBucket/types.ts - Definições de tipos
+export interface BucketState {
+  tokens: number;
+  lastRefill: number;
+  lastRequest: number;
+}
+
+export interface LeakyBucketOptions {
+  capacity?: number;
+  identifierKey?: (ctx: Context) => string;
+}
+
+// 📁 leakyBucket/utils.ts - Funções utilitárias
+export const calculateTokensToAdd = (lastRefill: number, now: number): number => {
+  const millisecondsInHour = 60 * 60 * 1000;
+  return Math.floor((now - lastRefill) / millisecondsInHour);
+};
+
+export const formatTimeInMinutes = (seconds: number): string => {
+  // Formatação em português para retry times
+};
+
+// 📁 leakyBucket/bucket.ts - Gerenciamento de buckets
+export const getOrCreateBucket = (identifier: string, capacity: number, now: number) => {
+  // Lógica de criação e atualização de buckets
+};
+
+export const consumeToken = (bucket: BucketState): number => {
+  // Consome um token do bucket
+};
+
+// 📁 leakyBucket/responses.ts - Respostas HTTP
+export const handleRateLimitExceeded = (ctx: Context, requestBody: any, ...) => {
+  // Gera respostas apropriadas para rate limit
+};
+
+// 📁 leakyBucket/index.ts - Orquestração principal
+export const leakyBucketMiddleware = (options: LeakyBucketOptions = {}) => {
+  return async (ctx: Context, next: Next): Promise<void> => {
+    // Orquestra todos os módulos
+    const bucket = getOrCreateBucket(identifier, capacity, now);
+
+    if (bucket.tokens < 1) {
+      handleRateLimitExceeded(ctx, requestBody, bucket.lastRefill, capacity, identifier);
+      return;
+    }
+
+    const currentTokens = consumeToken(bucket);
+    // ... resto da lógica
+  };
+};
+```
+
+#### Benefícios da Modularização
+
+- **🎯 Separação de Responsabilidades**: Cada arquivo tem uma função específica
+- **📖 Legibilidade Melhorada**: De 201 linhas em 1 arquivo para 6 arquivos organizados
+- **🧪 Testabilidade**: Funções pequenas e puras são fáceis de testar
+- **🔄 Reutilização**: Componentes podem ser usados independentemente
+- **🛠️ Manutenibilidade**: Mudanças isoladas por responsabilidade
+
+#### GraphQL Code Generator Integration
+
+#### Benefícios da Integração GraphQL Code Generator
+
+✅ **Type Safety Completo**: Todos os types são gerados automaticamente do schema GraphQL
+✅ **Sincronização Automática**: Types sempre atualizados com mudanças no schema
+✅ **IntelliSense Aprimorado**: Autocompletar preciso em resolvers e queries
+✅ **Detecção de Erros**: Compilação falha se types não estão sincronizados
+✅ **Menos Código Manual**: Redução significativa de tipos escritos manualmente
+✅ **Manutenibilidade**: Mudanças no schema se propagam automaticamente
+
+O projeto agora usa geração automática de types TypeScript:
+
+```typescript
+// Types auto-gerados em src/types/graphql.ts
+import {
+  User,
+  AuthResponse,
+  TokenStatus,
+  MutationRegisterArgs,
+  Resolvers
+} from "../../types/graphql";
+
+// Uso nos resolvers com type safety completo
+const resolvers: Resolvers = {
+  Query: {
+    tokenStatus: async (_, __, { ctx }): Promise<TokenStatus> => {
+      // Type safety automático baseado no schema GraphQL
+    }
+  }
+};
+```
 
 #### Implementação do Leaky Bucket com Mutex (v1.2)
 
@@ -292,11 +455,17 @@ cd api
 # Instalar dependências
 npm install
 
-# Executar em modo de desenvolvimento
+# Executar em modo de desenvolvimento (com geração automática de types)
 npm run dev
 
-# Compilar para produção
+# Compilar para produção (com geração automática de types)
 npm run build
+
+# Gerar types manualmente
+npm run codegen
+
+# Gerar types em modo watch
+npm run codegen:watch
 
 # Executar versão compilada
 npm start
@@ -603,13 +772,30 @@ mutation {
 
 - Implementação atual usa armazenamento em memória (para produção, usar Redis)
 - Autenticação JWT simples (para produção, implementar refresh tokens)
-- Adicionar testes automatizados para frontend e backend
 - Implementar um contador de tempo para que o usuário saiba quando será liberado um novo token
+- **✅ CONCLUÍDO (v1.4)**: ~~Modularizar middleware para melhor manutenibilidade~~
+- **✅ CONCLUÍDO (v1.4)**: ~~Implementar GraphQL Code Generator para type safety~~
+- **NOVO (v1.4)**: Adicionar testes unitários específicos para cada módulo do middleware
+- **NOVO (v1.4)**: Implementar benchmarks de performance da nova estrutura modular
 - **NOVO (v1.3)**: Expandir os testes automatizados de K6 para cobrir mais cenários de uso
 - **NOVO (v1.3)**: Implementar visualização gráfica dos resultados dos testes de carga
 - **NOVO (v1.2)**: Melhorar cobertura de testes para cenários específicos de concorrência
 - **NOVO (v1.2)**: Implementar monitoramento em tempo real do consumo de tokens
 - **NOVO (v1.2)**: Configurar CI/CD com testes automatizados de carga para validar performance antes de deploys
+
+## 📚 Documentação Adicional
+
+### Documentação do Middleware Modular
+- **`/api/src/middlewares/leakyBucket/README.md`**: Documentação completa do middleware modularizado
+- **`/api/src/middlewares/leakyBucket/MODULARIZATION_SUMMARY.md`**: Resumo detalhado da refatoração com métricas
+
+### Documentação do GraphQL Code Generator
+- **`/api/docs/GRAPHQL_TYPES.md`**: Guia de uso do GraphQL Code Generator
+- **`/api/codegen.yml`**: Configuração do gerador de types
+
+### Estrutura de Types Gerados
+- **`/api/src/types/graphql.ts`**: Types TypeScript auto-gerados (não editar manualmente)
+- Regenerados automaticamente a cada build/dev através dos scripts `predev` e `prebuild`
 
 ## 📝 Especificações do BACEN (DICT)
 

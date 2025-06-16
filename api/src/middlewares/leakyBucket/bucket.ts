@@ -58,7 +58,8 @@ export const getOrCreateBucket = (
 };
 
 /**
- * Consome um token do bucket
+ * Consome um token do bucket temporariamente
+ * O token será restaurado após o processamento da requisição
  * @param bucket Estado do bucket
  * @returns Número de tokens restantes
  */
@@ -68,7 +69,7 @@ export const consumeToken = (bucket: BucketState): number => {
 };
 
 /**
- * Restaura um token no bucket (usado em caso de erro)
+ * Restaura um token no bucket (usado após processamento da requisição)
  * @param identifier Identificador do bucket
  * @param capacity Capacidade máxima
  */
